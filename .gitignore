@@ -1,0 +1,21 @@
+# --- Qt / CMake Build Files ---
+build/
+bin/
+Makefile
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.pro.user
+*.user
+
+# --- OS / IDE Specific ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- FaceFynd Specific ---
+*.db
+*.log
+# Do not commit the actual AI models if they are large (optional)
+# models/*.onnx
