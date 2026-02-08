@@ -17,6 +17,8 @@ qt_add_executable(FaceFynd
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
+    database/dbmanager.cpp
+    database/dbmanager.h
 )
 
 target_link_libraries(FaceFynd
@@ -27,6 +29,11 @@ target_link_libraries(FaceFynd
         Qt::Concurrent
         Qt::Sql
         ${OpenCV_LIBS}
+)
+
+target_include_directories(FaceFynd
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/database
 )
 
 include(GNUInstallDirs)
