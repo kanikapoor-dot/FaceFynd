@@ -13,9 +13,17 @@ QStringList PhotoScanner::scanDirectory(const QString &path)
     }
 
     QDirIterator it(path,filters,QDir::Files,QDirIterator::Subdirectories);
+    int count = 0;
+
     while(it.hasNext())
     {
-        foundImages << it.next();
+        QString file = it.next();
+        foundImages << file;
+        count++;
+        if(count%10 == 0)
+        {
+            emit progessUpdated(count,file);
+        }
     }
     return foundImages;
 }

@@ -4,10 +4,16 @@
 #include <QString>
 #include <QStringList>
 #include <QDirIterator>
+#include <QObject>
 
-class PhotoScanner {
+class PhotoScanner : public QObject {
+    Q_OBJECT
 public:
-    static QStringList scanDirectory(const QString& path);
+    explicit PhotoScanner(QObject *parent = nullptr): QObject(parent) {}
+
+    QStringList scanDirectory(const QString& path);
+signals:
+    void progessUpdated(int count, QString currentFile);
 };
 
 #endif
