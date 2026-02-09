@@ -9,7 +9,7 @@
 #include <QSqlQuery>
 #include <QtConcurrent>
 #include <QFileDialog>
-
+#include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -71,31 +71,71 @@ void MainWindow::onScanFinished()
 {
     QStringList foundImages = m_watcher.result();
 
-    ui->progressBar->setRange(0,100);
-    ui->progressBar->setValue(100);
-
-    if(!foundImages.isEmpty())
+    if(foundImages.isEmpty())
     {
-        if(db->saveScannedPaths(foundImages))
-        {
-           ui->statusbar->showMessage(tr("Index Complete: %1 images saved.").arg(foundImages.size()));
-        } else
-        {
-            ui->statusbar->showMessage("Database error: Could not save paths.");
-        }
-    } else
-    {
-        ui->statusbar->showMessage("Scan finished. No images found");
+        ui->statusbar->showMessage("Scan finished. No images found.");
+        ui->progressBar->setRange(0, 100);
         ui->progressBar->setValue(0);
+        ui->btnSelectFolder->setEnabled(true);
+        return;
     }
 
-    ui->btnSelectFolder->setEnabled(true);
+    if(!db->saveScannedPaths(foundImages))
+    {
+        ui->statusbar->showMessage("Database error: Could not save paths.");
+        ui->btnSelectFolder->setEnabled(true);
+        return;
+    }
+
+    facedetector->resetAbort();
+
+    ui->statusbar->showMessage(tr("Files indexed. Analyzing faces for %1 images...").arg(foundImages.size()));
+    ui->progressBar->setRange(0, 0); // Pulse mode for AI work
+    ui->btnSelectFolder->setEnabled(false);
+
+    connect(facedetector,&FaceDetector::analyzeUpdater,this, [this](int current, int total) {
+        ui->progressBar->setRange(0, total);
+        ui->progressBar->setValue(current);
+        ui->statusbar->showMessage(tr("Analyzing faces: %1 of %2 images processed...")
+                                       .arg(current).arg(total));
+    }, Qt::QueuedConnection);
+
+    QFuture<void> aiFuture =  QtConcurrent::run([this,foundImages](){
+        facedetector->processImages(foundImages,db);
+    });
+
+    connect(&m_aiWatcher,&QFutureWatcher<void>::finished,this,[this](){
+        ui->statusbar->showMessage("Face analysis complete! All images processed.");
+        ui->progressBar->setRange(0, 100);
+        ui->progressBar->setValue(100);
+        ui->btnSelectFolder->setEnabled(true);
+        m_aiWatcher.disconnect();
+    });
+
+    m_aiWatcher.setFuture(aiFuture);
 }
 
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if(m_watcher.isRunning())
+    {
+        m_watcher.cancel();
+        m_watcher.waitForFinished();
+    }
 
+    if(m_aiWatcher.isRunning())
+    {
+        ui->statusbar->showMessage("Stopping AI and saving data... please wait.");
+        facedetector->stop();
+        qApp->processEvents();
+        m_aiWatcher.waitForFinished();
+    }
+    event->accept();
+}
 
 MainWindow::~MainWindow()
 {
     delete db;
     delete ui;
 }
+

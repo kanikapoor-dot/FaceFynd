@@ -26,8 +26,12 @@ private:
     QFutureWatcher<QStringList> m_watcher; //watches img background scan
     void onScanFinished();
     FaceDetector *facedetector;
+    QFutureWatcher<void> m_aiWatcher;
 
 private slots:
     void on_btnSelectFolder_clicked();
+
+protected:
+    void closeEvent(QCloseEvent *event) override;
 };
 #endif // MAINWINDOW_H

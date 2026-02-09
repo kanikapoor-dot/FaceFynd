@@ -65,9 +65,16 @@ bool DbManager::createTables()
     return success;
 }
 
-bool DbManager::addFace(int photoId, const QRect& rect,const QVector<float>& embed)
+bool DbManager::addFace(int photoId, const QRect& rect,const QVector<float>& embed,const QString &connectionName)
 {
-    QSqlQuery query;
+    QSqlDatabase db = QSqlDatabase::database(connectionName);
+
+    if (!db.isOpen()) {
+        qDebug() << "Database connection not open in thread:" << connectionName;
+        return false;
+    }
+
+    QSqlQuery query(db);
     query.prepare("INSERT INTO faces (photo_id, x, y, w, h, embedding) "
                   "VALUES (:photoId, :x, :y, :w, :h, :emb)");
     query.bindValue(":photoId", photoId);
@@ -96,4 +103,17 @@ bool DbManager::saveScannedPaths(const QStringList &paths)
     }
 
     return QSqlDatabase::database().commit();
+}
+
+int DbManager::getPhotoId(const QString &path, const QString &connectionName)
+{
+    QSqlDatabase db = QSqlDatabase::database(connectionName);
+    QSqlQuery query(db);
+    query.prepare("SELECT id FROM photos WHERE path = :path");
+    query.bindValue(":path",path);
+    if(query.exec() && query.next())
+    {
+        return query.value(0).toInt();
+    }
+    return -1;
 }
