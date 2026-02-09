@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QFutureWatcher>
 #include "dbmanager.h"
 
 QT_BEGIN_NAMESPACE
@@ -21,5 +22,7 @@ public:
 private:
     Ui::MainWindow *ui;
     DbManager *db;
+    QFutureWatcher<QStringList> m_watcher; //watches img background scan
+    void onScanFinished();
 };
 #endif // MAINWINDOW_H

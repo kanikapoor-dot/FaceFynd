@@ -5,36 +5,41 @@
 #include <QStandardPaths>
 #include <QDebug>
 #include <QSqlQuery>
+#include <QtConcurrent>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
+    , ui(new Ui::MainWindow), db(new DbManager())
 {
     ui->setupUi(this);
 
-    db = new DbManager();
-
     QString picturesPath = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
-    QStringList foundImages = PhotoScanner::scanDirectory(picturesPath);
+
+    //connect watcher
+    connect(&m_watcher,&QFutureWatcher<QStringList>::finished,this, &MainWindow::onScanFinished);
+
+    qDebug() << "Starting background scan...";
+    QFuture<QStringList> future = QtConcurrent::run(&PhotoScanner::scanDirectory,picturesPath);
+    m_watcher.setFuture(future);
+    ui->statusbar->showMessage("Scanning folders in backgound...");
+
+}
+
+void MainWindow::onScanFinished()
+{
+    QStringList foundImages = m_watcher.result();
 
     if(!foundImages.isEmpty())
     {
         if(db->saveScannedPaths(foundImages))
         {
+            ui->statusbar->showMessage("Scan Complete. Found images no :"+QString::number(foundImages.size()));
             qDebug() << "Successfully Indexed. Total Images No : " << foundImages.size();
         } else
         {
             qDebug() << "Failed to save paths to database";
         }
-
-        //Verification Query
-        QSqlQuery query("SELECT COUNT(*) FROM photos");
-        if(query.next())
-        {
-            qDebug() << "Total unique photos in facefynd database:" << query.value(0).toInt();
-        }
     }
-
 }
 
 MainWindow::~MainWindow()
