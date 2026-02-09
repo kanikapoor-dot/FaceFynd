@@ -20,6 +20,14 @@ DbManager::DbManager(const QString &path)
     }
 }
 
+DbManager::~DbManager()
+{
+    if(m_db.isOpen())
+    {
+        m_db.close();
+    }
+}
+
 bool DbManager::createTables()
 {
     QSqlQuery query;
@@ -74,4 +82,18 @@ bool DbManager::addFace(int photoId, const QRect& rect,const QVector<float>& emb
     query.bindValue(":emb", data);
 
     return query.exec();
+}
+
+bool DbManager::saveScannedPaths(const QStringList &paths)
+{
+    QSqlDatabase::database().transaction();
+    QSqlQuery query;
+    query.prepare("INSERT OR IGNORE INTO photos (path) VALUES (:path)");
+    for(const QString& path : paths)
+    {
+        query.bindValue(":path",path);
+        query.exec();
+    }
+
+    return QSqlDatabase::database().commit();
 }
