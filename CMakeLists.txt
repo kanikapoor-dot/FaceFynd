@@ -19,6 +19,8 @@ qt_add_executable(FaceFynd
     mainwindow.ui
     database/dbmanager.cpp
     database/dbmanager.h
+    scanner/photoscanner.cpp
+    scanner/photoscanner.h
 )
 
 target_link_libraries(FaceFynd
@@ -34,6 +36,7 @@ target_link_libraries(FaceFynd
 target_include_directories(FaceFynd
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/database
+        ${CMAKE_CURRENT_SOURCE_DIR}/scanner
 )
 
 include(GNUInstallDirs)
