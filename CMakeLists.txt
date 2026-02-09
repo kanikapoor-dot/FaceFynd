@@ -21,6 +21,8 @@ qt_add_executable(FaceFynd
     database/dbmanager.h
     scanner/photoscanner.cpp
     scanner/photoscanner.h
+    ai_logic/facedetector.cpp
+    ai_logic/facedetector.h
 )
 
 target_link_libraries(FaceFynd
@@ -37,6 +39,7 @@ target_include_directories(FaceFynd
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/database
         ${CMAKE_CURRENT_SOURCE_DIR}/scanner
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_logic
 )
 
 include(GNUInstallDirs)

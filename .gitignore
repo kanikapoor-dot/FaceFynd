@@ -17,5 +17,6 @@ Thumbs.db
 # --- FaceFynd Specific ---
 *.db
 *.log
+/models/*.onnx
 # Do not commit the actual AI models if they are large (optional)
 # models/*.onnx

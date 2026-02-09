@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QFutureWatcher>
 #include "dbmanager.h"
+#include "facedetector.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -24,6 +25,7 @@ private:
     DbManager *db;
     QFutureWatcher<QStringList> m_watcher; //watches img background scan
     void onScanFinished();
+    FaceDetector *facedetector;
 
 private slots:
     void on_btnSelectFolder_clicked();

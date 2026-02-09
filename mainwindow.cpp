@@ -2,15 +2,20 @@
 #include "ui_mainwindow.h"
 #include "photoscanner.h"
 #include "dbmanager.h"
+#include <opencv2/imgcodecs.hpp>
+
 #include <QStandardPaths>
 #include <QDebug>
 #include <QSqlQuery>
 #include <QtConcurrent>
 #include <QFileDialog>
 
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
-    , ui(new Ui::MainWindow), db(new DbManager())
+    , ui(new Ui::MainWindow)
+    , db(new DbManager())
+    , facedetector(new FaceDetector)
 {
     ui->setupUi(this);
 
@@ -20,6 +25,14 @@ MainWindow::MainWindow(QWidget *parent)
 
     //connect watcher
     connect(&m_watcher,&QFutureWatcher<QStringList>::finished,this, &MainWindow::onScanFinished);
+
+    QString modelPath = "models/face_detection_yunet.onnx";
+    if(facedetector->loadModel(modelPath))
+    {
+        qDebug() << "AI Engine: YuNet Loaded successfully.";
+    } else {
+        qDebug() << "AI Engine: Failed to load model. Check path:" << modelPath;
+    }
 }
 
 void MainWindow::on_btnSelectFolder_clicked()
