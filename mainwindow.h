@@ -24,5 +24,8 @@ private:
     DbManager *db;
     QFutureWatcher<QStringList> m_watcher; //watches img background scan
     void onScanFinished();
+
+private slots:
+    void on_btnSelectFolder_clicked();
 };
 #endif // MAINWINDOW_H

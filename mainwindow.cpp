@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QSqlQuery>
 #include <QtConcurrent>
+#include <QFileDialog>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -13,25 +14,43 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    ui->progressBar->setRange(0,0);
-    ui->progressBar->setValue(0);
+    ui->txtSelectedPath->setStyleSheet("background-color: #f0f0f0; color: #333;");
+    ui->progressBar->setRange(0,100);
+    //ui->progressBar->setValue(0);
 
-    QString picturesPath = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
-    ui->statusbar->showMessage("Preparing to scan" + picturesPath);
+    //connect watcher
+    connect(&m_watcher,&QFutureWatcher<QStringList>::finished,this, &MainWindow::onScanFinished);
+}
+
+void MainWindow::on_btnSelectFolder_clicked()
+{
+    //open directory
+    QString selectedDir = QFileDialog::getExistingDirectory(this,
+                                    tr("Select Folder"),
+                                    QDir::homePath(),
+                                    QFileDialog::ShowDirsOnly);
+
+    if(selectedDir.isEmpty()) return;
+
+    ui->txtSelectedPath->setText(selectedDir);
+
+    this->setFocus();
+
+    ui->btnSelectFolder->setEnabled(false);
+    ui->progressBar->setRange(0,0);
+    ui->statusbar->showMessage("Preparing to scan: " + selectedDir);
 
     PhotoScanner* scanner = new PhotoScanner(this);
 
-    connect(scanner,&PhotoScanner::progessUpdated,this,[this](int count, QString file){
+    connect(scanner,&PhotoScanner::progessUpdated,this,[this](int count){
         ui->statusbar->showMessage(tr("Scanning... Found %1 images").arg(count));
         ui->progressBar->setRange(0,0);
     });
 
-    //connect watcher
-    connect(&m_watcher,&QFutureWatcher<QStringList>::finished,this, &MainWindow::onScanFinished);
-
-    QFuture<QStringList> future = QtConcurrent::run([scanner,picturesPath](){
-        return scanner->scanDirectory(picturesPath);
+    QFuture<QStringList> future = QtConcurrent::run([scanner,selectedDir](){
+        return scanner->scanDirectory(selectedDir);
     });
+
     m_watcher.setFuture(future);
 }
 
@@ -56,7 +75,11 @@ void MainWindow::onScanFinished()
         ui->statusbar->showMessage("Scan finished. No images found");
         ui->progressBar->setValue(0);
     }
+
+    ui->btnSelectFolder->setEnabled(true);
 }
+
+
 
 MainWindow::~MainWindow()
 {

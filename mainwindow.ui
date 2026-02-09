@@ -36,9 +36,9 @@
    <widget class="QWidget" name="horizontalLayoutWidget">
     <property name="geometry">
      <rect>
-      <x>60</x>
-      <y>40</y>
-      <width>631</width>
+      <x>50</x>
+      <y>50</y>
+      <width>641</width>
       <height>51</height>
      </rect>
     </property>
@@ -54,9 +54,9 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="pushButton">
+      <widget class="QPushButton" name="btnSelectFolder">
        <property name="text">
-        <string>PushButton</string>
+        <string>Select Folder</string>
        </property>
       </widget>
      </item>
