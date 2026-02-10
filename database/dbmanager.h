@@ -13,7 +13,6 @@ public:
     ~DbManager();
     bool saveScannedPaths(const QStringList& paths);
     bool addPhoto(const QString& path,int& photoId);
-    bool addFace(int photoId, const QRect& rect,const QVector<float>& embed,const QString &connectionName = QSqlDatabase::defaultConnection);
     int getPhotoId(const QString& path, const QString &connectionName=QSqlDatabase::defaultConnection);
 private:
     QSqlDatabase m_db;

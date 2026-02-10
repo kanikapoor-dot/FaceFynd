@@ -23,6 +23,7 @@ qt_add_executable(FaceFynd
     scanner/photoscanner.h
     ai_logic/facedetector.cpp
     ai_logic/facedetector.h
+    database/dbworker.h
 )
 
 target_link_libraries(FaceFynd

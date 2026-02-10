@@ -27,6 +27,7 @@ private:
     void onScanFinished();
     FaceDetector *facedetector;
     QFutureWatcher<void> m_aiWatcher;
+    bool m_modelsLoaded = false;
 
 private slots:
     void on_btnSelectFolder_clicked();

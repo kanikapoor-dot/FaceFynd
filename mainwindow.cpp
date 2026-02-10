@@ -2,7 +2,9 @@
 #include "ui_mainwindow.h"
 #include "photoscanner.h"
 #include "dbmanager.h"
+#include "dbworker.h"
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/core.hpp>
 
 #include <QStandardPaths>
 #include <QDebug>
@@ -10,6 +12,7 @@
 #include <QtConcurrent>
 #include <QFileDialog>
 #include <QCloseEvent>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -18,32 +21,59 @@ MainWindow::MainWindow(QWidget *parent)
     , facedetector(new FaceDetector)
 {
     ui->setupUi(this);
-
     ui->txtSelectedPath->setStyleSheet("background-color: #f0f0f0; color: #333;");
     ui->progressBar->setRange(0,100);
-    //ui->progressBar->setValue(0);
+
+    qRegisterMetaType<FaceResult>("FaceResult");
+
+    QThread* dbThread = new QThread(this);
+    DbWorker* worker = new DbWorker("facefynd.db");
+
+    worker->moveToThread(dbThread);
+
+    connect(facedetector,&FaceDetector::faceDetected,
+            worker, &DbWorker::onSaveFace,
+            Qt::QueuedConnection);
+
+    connect(dbThread, &QThread::finished,worker, &QObject::deleteLater);
+    connect(this, &MainWindow::destroyed,dbThread,[dbThread](){
+        dbThread->quit();
+        dbThread->wait();
+    });
+
+    dbThread->start();
 
     //connect watcher
-    connect(&m_watcher,&QFutureWatcher<QStringList>::finished,this, &MainWindow::onScanFinished);
+    connect(&m_watcher,&QFutureWatcher<QStringList>::finished,
+            this, &MainWindow::onScanFinished);
+
+    connect(facedetector,&FaceDetector::analyzeUpdater,this, [this](int current, int total) {
+        ui->progressBar->setRange(0, total);
+        ui->progressBar->setValue(current);
+        ui->statusbar->showMessage(tr("Analyzing faces: %1 / %2 images processed...")
+                                       .arg(current).arg(total));
+    }, Qt::QueuedConnection);
 
     QString detectModelPath = "models/face_detection_yunet.onnx";
     QString recModelPath = "models/face_recognition_sface.onnx";
 
-    if(facedetector->loadModel(detectModelPath,recModelPath))
-    {
-        qDebug() << "AI Engine: YuNet and SFace Loaded successfully.";
+    m_modelsLoaded = facedetector->loadModel(detectModelPath, recModelPath);
+    if(m_modelsLoaded) {
+        qDebug() << "AI Engine: Ready.";
     } else {
-        qDebug() << "AI Engine: Failed to load model. Check Model present inside models directory in exe location.";
+        ui->statusbar->showMessage("AI Error: Models failed to load. Check paths.");
     }
 }
+
+
 
 void MainWindow::on_btnSelectFolder_clicked()
 {
     //open directory
     QString selectedDir = QFileDialog::getExistingDirectory(this,
-                                    tr("Select Folder"),
-                                    QDir::homePath(),
-                                    QFileDialog::ShowDirsOnly);
+                                                            tr("Select Folder"),
+                                                            QDir::homePath(),
+                                                            QFileDialog::ShowDirsOnly);
 
     if(selectedDir.isEmpty()) return;
 
@@ -71,6 +101,12 @@ void MainWindow::on_btnSelectFolder_clicked()
 
 void MainWindow::onScanFinished()
 {
+    if(!m_modelsLoaded)
+    {
+        QMessageBox::critical(this, "Error", "AI Models are not loaded. Cannot analyze.");
+        ui->btnSelectFolder->setEnabled(true);
+        return;
+    }
     QStringList foundImages = m_watcher.result();
 
     if(foundImages.isEmpty())
@@ -92,15 +128,8 @@ void MainWindow::onScanFinished()
     facedetector->resetAbort();
 
     ui->statusbar->showMessage(tr("Files indexed. Analyzing faces for %1 images...").arg(foundImages.size()));
-    ui->progressBar->setRange(0, 0); // Pulse mode for AI work
+    ui->progressBar->setRange(0, 0); // Busy indicator until first update
     ui->btnSelectFolder->setEnabled(false);
-
-    connect(facedetector,&FaceDetector::analyzeUpdater,this, [this](int current, int total) {
-        ui->progressBar->setRange(0, total);
-        ui->progressBar->setValue(current);
-        ui->statusbar->showMessage(tr("Analyzing faces: %1 of %2 images processed...")
-                                       .arg(current).arg(total));
-    }, Qt::QueuedConnection);
 
     QFuture<void> aiFuture =  QtConcurrent::run([this,foundImages](){
         facedetector->processImages(foundImages,db);

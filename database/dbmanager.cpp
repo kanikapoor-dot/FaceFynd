@@ -16,6 +16,9 @@ DbManager::DbManager(const QString &path)
         qDebug() << "Error: Connection with database failed" << m_db.lastError();
     } else
     {
+        QSqlQuery query(m_db);
+        query.exec("PRAGMA journal_mode=WAL;");
+        query.exec("PRAGMA synchronous=NORMAL;");
         createTables();
     }
 }
@@ -65,32 +68,6 @@ bool DbManager::createTables()
     return success;
 }
 
-bool DbManager::addFace(int photoId, const QRect& rect,const QVector<float>& embed,const QString &connectionName)
-{
-    QSqlDatabase db = QSqlDatabase::database(connectionName);
-
-    if (!db.isOpen()) {
-        qDebug() << "Database connection not open in thread:" << connectionName;
-        return false;
-    }
-
-    QSqlQuery query(db);
-    query.prepare("INSERT INTO faces (photo_id, x, y, w, h, embedding) "
-                  "VALUES (:photoId, :x, :y, :w, :h, :emb)");
-    query.bindValue(":photoId", photoId);
-    query.bindValue(":x", rect.x());
-    query.bindValue(":y", rect.y());
-    query.bindValue(":w", rect.width());
-    query.bindValue(":h", rect.height());
-
-    // Convert QVector<float> to QByteArray
-    QByteArray data(reinterpret_cast<const char*>(embed.constData()),
-                    embed.size() * sizeof(float));
-    query.bindValue(":emb", data);
-
-    return query.exec();
-}
-
 bool DbManager::saveScannedPaths(const QStringList &paths)
 {
     QSqlDatabase::database().transaction();
@@ -107,10 +84,18 @@ bool DbManager::saveScannedPaths(const QStringList &paths)
 
 int DbManager::getPhotoId(const QString &path, const QString &connectionName)
 {
+    if(!QSqlDatabase::contains(connectionName))
+    {
+        QSqlDatabase threadDb = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+        threadDb.setDatabaseName(m_db.databaseName());
+        if(!threadDb.open()) return -1;
+    }
+
     QSqlDatabase db = QSqlDatabase::database(connectionName);
     QSqlQuery query(db);
     query.prepare("SELECT id FROM photos WHERE path = :path");
     query.bindValue(":path",path);
+
     if(query.exec() && query.next())
     {
         return query.value(0).toInt();

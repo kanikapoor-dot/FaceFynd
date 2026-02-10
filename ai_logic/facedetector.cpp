@@ -3,6 +3,11 @@
 #include <QString>
 #include <QRect>
 #include <opencv2/imgcodecs.hpp>
+#include <QtConcurrent>
+#include <QMutex>
+#include <QMutexLocker>
+
+static QMutex aiMutex;
 
 FaceDetector::FaceDetector() {}
 
@@ -40,52 +45,64 @@ cv::Mat FaceDetector::detect(const cv::Mat &image)
 void FaceDetector::processImages(const QStringList &paths, DbManager *dbmanager)
 {
     int total = paths.size();
-    int current = 0;
-    QString threadConn = "AI_FaceDetect_Conn";
-    {
-        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE",threadConn);
-        db.setDatabaseName("facefynd.db");
-        if(!db.open()) return;
-        db.transaction();
-        for(const QString& path : paths)
+    std::atomic<int> current{0};
+
+    QtConcurrent::blockingMap(paths, [this, dbmanager, total, &current](const QString& path) {
+        if (m_abort) return;
+
+        if(detector.empty() || recognizer.empty())
         {
-            if(m_abort) break;
+            qDebug() << "AI Models not initialized! Aborting thread.";
+            return;
+        }
 
+        cv::Mat img = cv::imread(path.toStdString());
+        if (img.empty())
+        {
             current++;
-            emit analyzeUpdater(current,total);
+            emit analyzeUpdater(current.load(),total);
+            return;
+        }
 
-            cv::Mat img = cv::imread(path.toStdString());
-            if(img.empty()) continue;
+        // Yunet Detection
+        cv::Mat faces;
+        {
+            QMutexLocker locker(&aiMutex);
+            faces = detect(img);
+        }
 
-            cv::Mat faces = detect(img);
+        // Use a temporary connection for the READ-ONLY photoId lookup
+        QString threadConn = QString("Thread_Read_%1").arg(reinterpret_cast<quintptr>(QThread::currentThreadId()));
+        int photoId = dbmanager->getPhotoId(path, threadConn);
 
-            int photoId = dbmanager->getPhotoId(path,threadConn);
-            if(photoId == -1) continue;
-
-            for(int i = 0;i < faces.rows; ++i)
-            {
-                int x = static_cast<int>(faces.at<float>(i,0));
-                int y = static_cast<int>(faces.at<float>(i,1));
-                int w = static_cast<int>(faces.at<float>(i,2));
-                int h = static_cast<int>(faces.at<float>(i,3));
-                QRect faceRect(x,y,w,h);
-
-                //SFace Recoginition Logic
+        if (photoId != -1 && faces.rows > 0) {
+            for (int i = 0; i < faces.rows; ++i) {
+                // 2. AI Recognition (SFace)
                 cv::Mat alignedFace, feature;
-                recognizer->alignCrop(img,faces.row(i),alignedFace);
-                recognizer->feature(alignedFace,feature);
+                {
+                    QMutexLocker locker(&aiMutex);
+                    recognizer->alignCrop(img, faces.row(i), alignedFace);
+                    recognizer->feature(alignedFace, feature);
+                }
 
                 QVector<float> embedding;
                 embedding.reserve(feature.cols);
-                for(int j = 0;j < feature.cols; ++j)
-                {
-                    embedding.append(feature.at<float>(0,j));
+                for(int j = 0; j < feature.cols; ++j) {
+                    embedding.append(feature.at<float>(0, j));
                 }
 
-                dbmanager->addFace(photoId,faceRect,embedding,threadConn);
+                // 3. Instead of saving here, we "Throw the order to the DB Worker"
+                FaceResult res;
+                res.photoId = photoId;
+                res.rect = QRect(faces.at<float>(i,0), faces.at<float>(i,1),
+                                 faces.at<float>(i,2), faces.at<float>(i,3));
+                res.embedding = embedding;
+
+                emit faceDetected(res);
             }
         }
-        db.commit();
-    }
-    QSqlDatabase::removeDatabase(threadConn);
+
+        current++;
+        emit analyzeUpdater(current.load(), total);
+    });
 }

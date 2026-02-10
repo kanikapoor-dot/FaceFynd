@@ -7,6 +7,12 @@
 #include <QObject>
 #include "dbmanager.h"
 
+struct FaceResult {
+    int photoId;
+    QRect rect;
+    QVector<float> embedding;
+};
+Q_DECLARE_METATYPE(FaceResult)
 
 class FaceDetector : public QObject {
     Q_OBJECT
@@ -26,6 +32,7 @@ private:
     std::atomic<bool> m_abort{false};
 signals:
     void analyzeUpdater(int current,int total);
+    void faceDetected(FaceResult result);
 };
 
 #endif
