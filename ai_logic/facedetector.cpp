@@ -6,11 +6,11 @@
 
 FaceDetector::FaceDetector() {}
 
-bool FaceDetector::loadModel(const QString &modelPath, const QSize &inputSize)
+bool FaceDetector::loadModel(const QString &detectionModelPath,const QString &recModelPath, const QSize &inputSize)
 {
     try{
         detector = cv::FaceDetectorYN::create(
-            modelPath.toStdString(),
+            detectionModelPath.toStdString(),
             "",
             cv::Size(inputSize.width(),inputSize.height()),
             scoreThreshold,
@@ -18,7 +18,9 @@ bool FaceDetector::loadModel(const QString &modelPath, const QSize &inputSize)
             topK
             );
 
-        return !detector.empty();
+        recognizer = cv::FaceRecognizerSF::create(recModelPath.toStdString(),"");
+
+        return !detector.empty() && !recognizer.empty();
     } catch(const cv::Exception& e)
     {
         qDebug() << "OpenCV Error:" << e.what();
@@ -48,8 +50,10 @@ void FaceDetector::processImages(const QStringList &paths, DbManager *dbmanager)
         for(const QString& path : paths)
         {
             if(m_abort) break;
+
             current++;
             emit analyzeUpdater(current,total);
+
             cv::Mat img = cv::imread(path.toStdString());
             if(img.empty()) continue;
 
@@ -57,17 +61,28 @@ void FaceDetector::processImages(const QStringList &paths, DbManager *dbmanager)
 
             int photoId = dbmanager->getPhotoId(path,threadConn);
             if(photoId == -1) continue;
+
             for(int i = 0;i < faces.rows; ++i)
             {
                 int x = static_cast<int>(faces.at<float>(i,0));
                 int y = static_cast<int>(faces.at<float>(i,1));
                 int w = static_cast<int>(faces.at<float>(i,2));
                 int h = static_cast<int>(faces.at<float>(i,3));
-
                 QRect faceRect(x,y,w,h);
 
-                QVector<float> emptyEmbed;
-                dbmanager->addFace(photoId,faceRect,emptyEmbed,threadConn);
+                //SFace Recoginition Logic
+                cv::Mat alignedFace, feature;
+                recognizer->alignCrop(img,faces.row(i),alignedFace);
+                recognizer->feature(alignedFace,feature);
+
+                QVector<float> embedding;
+                embedding.reserve(feature.cols);
+                for(int j = 0;j < feature.cols; ++j)
+                {
+                    embedding.append(feature.at<float>(0,j));
+                }
+
+                dbmanager->addFace(photoId,faceRect,embedding,threadConn);
             }
         }
         db.commit();
